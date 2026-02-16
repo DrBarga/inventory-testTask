@@ -95,6 +95,7 @@ function InventoryList({ items }: { items: Item[] }) {
 // ============================================
 function InventoryItem({ item }: { item: Item }) {
   const fetcher = useFetcher();
+  const revalidator = useRevalidator();
   
   // Manual optimistic state management
   const [optimisticStock, setOptimisticStock] = useState(item.stock);
@@ -104,12 +105,18 @@ function InventoryItem({ item }: { item: Item }) {
     setOptimisticStock(item.stock);
   }, [item.stock]);
 
-  // Reset on error
+  // Handle fetcher response
   useEffect(() => {
-    if (fetcher.data && !fetcher.data.success) {
-      setOptimisticStock(item.stock);
+    if (fetcher.state === "idle" && fetcher.data) {
+      if (fetcher.data.success) {
+        // Success: revalidate to sync with server
+        revalidator.revalidate();
+      } else {
+        // Error: rollback optimistic update
+        setOptimisticStock(item.stock);
+      }
     }
-  }, [fetcher.data, item.stock]);
+  }, [fetcher.state, fetcher.data, item.stock, revalidator]);
 
   const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
   const hasError = fetcher.data && !fetcher.data.success;
