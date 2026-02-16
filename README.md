@@ -1,87 +1,126 @@
-# Welcome to React Router!
+# Inventory Dashboard - Remix Test Assignment
 
-A modern, production-ready template for building full-stack React applications using React Router.
+A resilient inventory management dashboard built with Remix and Shopify Polaris, demonstrating streaming, optimistic UI, and error handling patterns.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
-
-## Features
-
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
+## Installation
 ```bash
 npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
+Open [http://localhost:5173/dashboard](http://localhost:5173/dashboard)
 
-## Building for Production
+## Key Implementation Choices
 
-Create a production build:
+### Task 1: Streaming (Eliminate White Screen)
 
-```bash
-npm run build
+**Approach:** Used React Router's `Await` component with `Suspense` to stream data.
+
+- Loader returns a promise without awaiting it
+- `Suspense` fallback shows skeleton loader immediately
+- Main content renders after 3-second delay
+- Page shell loads instantly (0ms), data streams in background
+
+**Code:**
+```tsx
+export async function loader() {
+  const inventoryPromise = getInventory(); // Don't await
+  return { inventory: inventoryPromise };
+}
+
+// In component:
+<Suspense fallback={<InventorySkeleton />}>
+  <Await resolve={data.inventory}>
+    {(items) => <InventoryList items={items} />}
+  </Await>
+</Suspense>
 ```
 
-## Deployment
+### Task 2: Optimistic UI (Instant Feedback)
 
-### Docker Deployment
+**Approach:** Manual optimistic state management with `useFetcher` and local state.
 
-To build and run using Docker:
+- Used `useState` to track optimistic stock count
+- On button click, immediately decrement local state (0ms delay)
+- `useFetcher` handles submission without full page reload
+- On error, `useEffect` detects failed response and reverts to actual stock
+- Button disabled during submission to prevent double-clicks
 
-```bash
-docker build -t my-app .
+**Code:**
+```tsx
+const [optimisticStock, setOptimisticStock] = useState(item.stock);
 
-# Run the container
-docker run -p 3000:3000 my-app
+// Reset on error
+useEffect(() => {
+  if (fetcher.data && !fetcher.data.success) {
+    setOptimisticStock(item.stock); // Rollback
+  }
+}, [fetcher.data, item.stock]);
+
+const handleClaim = () => {
+  setOptimisticStock(optimisticStock - 1); // Immediate update
+};
 ```
 
-The containerized application can be deployed to any platform that supports Docker, including:
+**Race Condition Protection:** 
+- Button `disabled` when `fetcher.state === "submitting"` or `"loading"`
+- Prevents multiple simultaneous requests per item
 
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
+### Task 3: Error Boundary (Retry Logic)
 
-### DIY Deployment
+**Approach:** Route-level `ErrorBoundary` with `useRevalidator` for retry.
 
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
+- Catches loader errors without crashing entire page
+- Uses Polaris `Banner` component to display error message
+- `useRevalidator().revalidate()` triggers loader re-execution
+- No full page refresh required
 
-Make sure to deploy the output of `npm run build`
+**Code:**
+```tsx
+export function ErrorBoundary() {
+  const revalidator = useRevalidator();
 
+  const handleRetry = () => {
+    revalidator.revalidate(); // Re-runs loader
+  };
+
+  return (
+    <Banner 
+      title="Failed to load inventory"
+      action={{ content: "Retry", onAction: handleRetry }}
+    />
+  );
+}
 ```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
+
+## Architecture Decisions
+
+1. **No `defer()` usage:** React Router v7 handles promise streaming automatically with `Await`
+2. **Manual optimistic state:** Used `useState` + `useEffect` instead of experimental `useOptimistic` for better compatibility
+3. **Polaris components:** Maintained consistent Shopify design system throughout
+4. **Type safety:** Full TypeScript typing for all data structures
+
+## Testing the Application
+
+- **Streaming:** Refresh page - skeleton appears immediately, data loads after 3s
+- **Optimistic UI:** Click "Claim One" - stock decreases instantly, reverts on error
+- **Error Handling:** Refresh multiple times - ~20% chance of error with retry button
+
+## Project Structure
+```
+app/
+├── models/
+│   └── inventory.server.ts   # Mock backend (chaos API)
+├── routes/
+│   ├── home.tsx              # Landing page
+│   └── dashboard.tsx         # Main inventory dashboard
+├── root.tsx                  # App shell with Polaris provider
+└── routes.ts                 # Route configuration
 ```
 
-## Styling
+## Technologies
 
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.
+- **Framework:** React Router v7
+- **UI Library:** Shopify Polaris
+- **Language:** TypeScript
+- **Styling:** Polaris CSS

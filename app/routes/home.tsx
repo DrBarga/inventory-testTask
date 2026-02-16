@@ -1,13 +1,18 @@
-import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
-
-export function meta({}: Route.MetaArgs) {
-  return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
-  ];
-}
+import { Page, Text } from "@shopify/polaris";
+import { Link } from "react-router";
 
 export default function Home() {
-  return <Welcome />;
+  return (
+    <Page title="Welcome">
+      <Text as="p" variant="bodyLg">
+        Welcome to Inventory Management System.
+      </Text>
+      <br />
+      <Link to="/dashboard">
+        <Text as="span" variant="bodyMd" fontWeight="bold">
+          Go to Dashboard →
+        </Text>
+      </Link>
+    </Page>
+  );
 }
